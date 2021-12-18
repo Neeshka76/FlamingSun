@@ -16,18 +16,21 @@ namespace FlamingSun
     {
         private bool sunsSpawned = false;
         private List<Item> ListSunsSpawned = new List<Item>();
-        private float timerBeforeWaveOfFireballs = 10f;
-        private float timerDurationWaveOfFireballs = 30f;
         private float timer = 0f;
-        private float timerThrowTotalDelay = 0.3f;
         private float timerDelay = 0f;
         private bool waveOfFireballsActive = false;
-        private int numOfFireballs = 1;
         private float sizeFireball = 1f;
-        private float chancesOfRandomTarget = 20;
         private List<Creature> ListOfCreatureInRadiusOfFire;
-        public LevelModuleSurvival levelModuleSurvival;
-        public WaveSpawner waveSpawner;
+        private bool waveStarted = false;
+        public float timerIdleWaveOfFireballs = 10f;
+        public float timerActivateWaveOfFireballs = 30f;
+        public float timerTickThrowDelay = 0.3f;
+        public int numOfFireballsPerTick = 1;
+        public int chancesOfRandomThrow = 20;
+        public int radiusOfDetectionCreaturesByFlamingSun = 150;
+        public bool sunTargetsPlayer = true;
+        public bool fireballsOutsideOfCombatWave = false;
+        public bool sunThrowFireballs = true;
         public override IEnumerator OnLoadCoroutine()
         {
             EventManager.onLevelLoad += EventManager_onLevelLoad;
@@ -137,13 +140,19 @@ namespace FlamingSun
 
         public override void Update()
         {
-            
-            if(sunsSpawned)
+            waveStarted = SnippetCode.SnippetCode.returnWaveStarted();
+            if(!fireballsOutsideOfCombatWave && !waveStarted)
             {
-                CalculateWave();
+                timer = 0f;
+                timerDelay = 0f;
+                waveOfFireballsActive = false;
+            }
+            if(sunsSpawned && (waveStarted || fireballsOutsideOfCombatWave) && sunThrowFireballs)
+            {
+                CalculateWaveIdleActive();
                 if (waveOfFireballsActive)
                 {
-                    if (timerDelay < timerThrowTotalDelay)
+                    if (timerDelay < timerTickThrowDelay)
                     {
                         timerDelay += Time.deltaTime;
                     }
@@ -160,11 +169,11 @@ namespace FlamingSun
             GameManager.local.StartCoroutine(CleanFireballs());
         }
 
-        private void CalculateWave()
+        private void CalculateWaveIdleActive()
         {
             if(!waveOfFireballsActive)
             {
-                if (timer < timerBeforeWaveOfFireballs)
+                if (timer < timerIdleWaveOfFireballs)
                 {
                     timer += Time.deltaTime;
                 }
@@ -176,7 +185,7 @@ namespace FlamingSun
             }
             else
             {
-                if(timer < timerDurationWaveOfFireballs)
+                if(timer < timerActivateWaveOfFireballs)
                 {
                     timer += Time.deltaTime;
                 }
@@ -192,47 +201,62 @@ namespace FlamingSun
         {
             foreach (Item sun in ListSunsSpawned)
             {
-                ListOfCreatureInRadiusOfFire = SnippetCode.SnippetCode.CreaturesInRadius(sun.transform.position, 150).ToList();
+                ListOfCreatureInRadiusOfFire = SnippetCode.SnippetCode.CreaturesInRadius(sun.transform.position, radiusOfDetectionCreaturesByFlamingSun).ToList();
+                if(sunTargetsPlayer == false)
+                {
+                    for(int i = ListOfCreatureInRadiusOfFire.Count - 1; i >= 0; i--)
+                    {
+                        if(ListOfCreatureInRadiusOfFire[i] == Player.currentCreature)
+                        {
+                            ListOfCreatureInRadiusOfFire.RemoveAt(i);
+                        }   
+                    }
+                }
             }
-            for (int i = 0; i <= numOfFireballs; i++)
+            if (ListOfCreatureInRadiusOfFire.Count != 0)
             {
-                Vector3 offset;
-                if (UnityEngine.Random.Range(0, 100) >= chancesOfRandomTarget)
+                for (int i = 0; i <= numOfFireballsPerTick; i++)
                 {
-                    offset = (SnippetCode.SnippetCode.GetRandomRagdollPart(ListOfCreatureInRadiusOfFire[UnityEngine.Random.Range(0, ListOfCreatureInRadiusOfFire.Count())]).transform.position
-                        - origin.transform.position).normalized * (8.15f + (sizeFireball * 0.15f));
-                }
-                else
-                {
-                    offset = Quaternion.Euler(UnityEngine.Random.value * 360.0f,
-                    UnityEngine.Random.value * 360.0f,
-                    UnityEngine.Random.value * 360.0f)
-                    * SnippetCode.SnippetCode.forward * (8.15f + (sizeFireball * 0.15f));
-                }
-                Catalog.GetData<ItemData>("ProjectileFlamingSun").SpawnAsync(projectile =>
-                {
-                    projectile.disallowDespawn = true;
-                    projectile.transform.position = origin.transform.position + offset;
-                    projectile.rb.useGravity = false;
-                    projectile.rb.velocity = Vector3.zero;
-                    projectile.transform.localScale = SnippetCode.SnippetCode.one * sizeFireball;
-                    foreach (CollisionHandler collisionHandler in projectile.collisionHandlers)
+                    Vector3 offset;
+                    if (UnityEngine.Random.Range(0, 100) >= chancesOfRandomThrow)
                     {
-                        foreach (Damager damager in collisionHandler.damagers)
-                            damager.Load(Catalog.GetData<DamagerData>("Fireball"), collisionHandler);
+                        offset = (SnippetCode.SnippetCode.GetRandomRagdollPart(ListOfCreatureInRadiusOfFire[UnityEngine.Random.Range(0, ListOfCreatureInRadiusOfFire.Count())]).transform.position
+                            - origin.transform.position).normalized * (8.15f + (sizeFireball * 0.15f));
                     }
-                    ItemMagicProjectile component = projectile.GetComponent<ItemMagicProjectile>();
-                    if (component)
+                    else
                     {
-                        component.guided = false;
-                        component.speed = 0;
-                        component.Fire((projectile.transform.position - origin.transform.position).normalized * 30f, Catalog.GetData<EffectData>("SpellFireball"));
-                        component.transform.localScale = SnippetCode.SnippetCode.one * sizeFireball;
+                        offset = Quaternion.Euler(UnityEngine.Random.value * 360.0f,
+                        UnityEngine.Random.value * 360.0f,
+                        UnityEngine.Random.value * 360.0f)
+                        * SnippetCode.SnippetCode.forward * (8.15f + (sizeFireball * 0.15f));
                     }
-                    projectile.isThrowed = true;
-                    projectile.isFlying = true;
-                    projectile.Throw(flyDetection: Item.FlyDetection.Forced);
-                });
+                    Catalog.GetData<ItemData>("ProjectileFlamingSun").SpawnAsync(projectile =>
+                    {
+                        projectile.disallowDespawn = true;
+                        projectile.transform.position = origin.transform.position + offset;
+                        projectile.rb.useGravity = false;
+                        projectile.rb.velocity = Vector3.zero;
+                        projectile.transform.localScale = SnippetCode.SnippetCode.one * sizeFireball;
+                        foreach (CollisionHandler collisionHandler in projectile.collisionHandlers)
+                        {
+                            foreach (Damager damager in collisionHandler.damagers)
+                                damager.Load(Catalog.GetData<DamagerData>("Fireball"), collisionHandler);
+                        }
+                        ItemMagicProjectile component = projectile.GetComponent<ItemMagicProjectile>();
+                        if (component)
+                        {
+                            component.guided = false;
+                            component.speed = 0;
+                            component.allowDeflect = true;
+                            component.deflectEffectData = Catalog.GetData<EffectData>("HitFireBallDeflect");
+                            component.Fire((projectile.transform.position - origin.transform.position).normalized * 30f, Catalog.GetData<EffectData>("SpellFireball"));
+                            component.transform.localScale = SnippetCode.SnippetCode.one * sizeFireball;
+                        }
+                        projectile.isThrowed = true;
+                        projectile.isFlying = true;
+                        projectile.Throw(flyDetection: Item.FlyDetection.Forced);
+                    });
+                }
             }
         }
 

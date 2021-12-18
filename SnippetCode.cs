@@ -166,5 +166,18 @@ namespace SnippetCode
             Array values = Enum.GetValues(typeof(RagdollPart.Type));
             return creature.ragdoll.GetPart((RagdollPart.Type) values.GetValue(UnityEngine.Random.Range(0, values.Length)));
         }
+
+        public static bool returnWaveStarted()
+        {
+            int nbWaveStarted = 0;
+            foreach (WaveSpawner waveSpawner in WaveSpawner.instances)
+            {
+                if (waveSpawner.isRunning)
+                {
+                    nbWaveStarted++;
+                }
+            }
+            return nbWaveStarted != 0 ? true : false;
+        }
     }
 }
