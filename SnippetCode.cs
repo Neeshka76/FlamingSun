@@ -11,7 +11,7 @@ using System.Collections;
 
 namespace SnippetCode
 {
-    static class SnippetCode
+    public static class SnippetCode
     {
         /// <summary>
         /// Vector pointing away from the palm
@@ -131,9 +131,16 @@ namespace SnippetCode
 
         public static Vector3 GetChest(this Creature creature) => Vector3.Lerp(creature.GetTorso().transform.position,
             creature.GetHead().transform.position, 0.5f);
-        public static IEnumerable<Creature> CreaturesInRadius(Vector3 position, float radius)
+        public static IEnumerable<Creature> CreaturesInRadius(this Vector3 position, float radius)
         {
             return Creature.allActive.Where(creature => (creature.GetChest() - position).sqrMagnitude < radius * radius);
+        }
+
+        public static IEnumerable<Creature> CreatureInRadiusMinusPlayer(this Vector3 position, float radius)
+        {
+            return Creature.allActive.Where(creature =>
+                ((creature.GetChest() - position).sqrMagnitude < radius * radius) && !creature.isPlayer
+            );
         }
         public static void Depenetrate(this Item item)
         {
@@ -164,7 +171,7 @@ namespace SnippetCode
         public static RagdollPart GetRandomRagdollPart(this Creature creature)
         {
             Array values = Enum.GetValues(typeof(RagdollPart.Type));
-            return creature.ragdoll.GetPart((RagdollPart.Type) values.GetValue(UnityEngine.Random.Range(0, values.Length)));
+            return creature.ragdoll.GetPart((RagdollPart.Type)values.GetValue(UnityEngine.Random.Range(0, values.Length)));
         }
 
         public static bool returnWaveStarted()
@@ -178,6 +185,173 @@ namespace SnippetCode
                 }
             }
             return nbWaveStarted != 0 ? true : false;
+        }
+
+        public static Vector3 FromToDirection(this Vector3 from, Vector3 to)
+        {
+            return to - from;
+        }
+        /// <summary>
+        /// Add a force that attracts when coef is positive and repulse when is negative
+        /// </summary>
+        public static void Attraction_Repulsion_Force(this Rigidbody rigidbody, Vector3 origin, Vector3 attractedRb, bool useDistance, float coef)
+        {
+            if (useDistance)
+            {
+                float distance = FromToDirection(attractedRb, origin).magnitude;
+                Vector3 direction = FromToDirection(attractedRb, origin).normalized;
+                rigidbody.AddForce(direction * (coef / distance) / (rigidbody.mass / 2), ForceMode.VelocityChange);
+            }
+            else
+            {
+                Vector3 direction = FromToDirection(attractedRb, origin).normalized;
+                rigidbody.AddForce(direction * coef / (rigidbody.mass / 2), ForceMode.VelocityChange);
+            }
+        }
+
+        public static Vector3[] CreateCircle(this Vector3 origin, Vector3 direction, float radius, int nbElementsAroundCircle)
+        {
+            Vector3[] positions = new Vector3[nbElementsAroundCircle];
+            int angle = 360 / nbElementsAroundCircle;
+            for (int i = 0; i < nbElementsAroundCircle; i++)
+            {
+                positions[i] = origin + direction * radius;
+            }
+            return positions;
+        }
+        public static void RotateCircle(this Vector3[] positions, Vector3 origin, Vector3 direction, float radius, int speed)
+        {
+            float rotationspeed = 0;
+            rotationspeed += Time.deltaTime * speed;
+        }
+
+        public static ConfigurableJoint CreateJointToProjectileForCreatureAttraction(this Item projectile, RagdollPart attractedRagdollPart, ConfigurableJoint joint)
+        {
+            JointDrive jointDrive = new JointDrive();
+            jointDrive.positionSpring = 1f;
+            jointDrive.positionDamper = 0.2f;
+            SoftJointLimit softJointLimit = new SoftJointLimit();
+            softJointLimit.limit = 0.15f;
+            SoftJointLimitSpring linearLimitSpring = new SoftJointLimitSpring();
+            linearLimitSpring.spring = 1f;
+            linearLimitSpring.damper = 0.2f;
+            joint = attractedRagdollPart.gameObject.AddComponent<ConfigurableJoint>();
+            joint.autoConfigureConnectedAnchor = false;
+            joint.targetRotation = Quaternion.identity;
+            joint.anchor = Vector3.zero;
+            joint.connectedBody = projectile.GetComponent<Rigidbody>();
+            joint.connectedAnchor = Vector3.zero;
+            joint.xMotion = ConfigurableJointMotion.Limited;
+            joint.yMotion = ConfigurableJointMotion.Limited;
+            joint.zMotion = ConfigurableJointMotion.Limited;
+            joint.angularXMotion = ConfigurableJointMotion.Limited;
+            joint.angularYMotion = ConfigurableJointMotion.Limited;
+            joint.angularZMotion = ConfigurableJointMotion.Limited;
+            joint.linearLimitSpring = linearLimitSpring;
+            joint.linearLimit = softJointLimit;
+            joint.angularXLimitSpring = linearLimitSpring;
+            joint.xDrive = jointDrive;
+            joint.yDrive = jointDrive;
+            joint.zDrive = jointDrive;
+            joint.massScale = 10000f;
+            joint.connectedMassScale = 0.00001f;
+            return joint;
+        }
+
+        public static void IgnoreCollider(this Ragdoll ragdoll, Collider collider, bool ignore = true)
+        {
+            foreach (var part in ragdoll.parts)
+            {
+                part.IgnoreCollider(collider, ignore);
+            }
+        }
+
+        public static void IgnoreCollider(this RagdollPart part, Collider collider, bool ignore = true)
+        {
+            foreach (var itemCollider in part.colliderGroup.colliders)
+            {
+                Physics.IgnoreCollision(collider, itemCollider, ignore);
+            }
+        }
+
+        public static void IgnoreCollider(this Item item, Collider collider, bool ignore)
+        {
+            foreach (var cg in item.colliderGroups)
+            {
+                foreach (var itemCollider in cg.colliders)
+                {
+                    Physics.IgnoreCollision(collider, itemCollider, ignore);
+                }
+            }
+        }
+
+        public static void addIgnoreRagdollAndItemHoldingCollision(Item item, Creature creature)
+        {
+            foreach (ColliderGroup colliderGroup in item.colliderGroups)
+            {
+                foreach (Collider collider in colliderGroup.colliders)
+                    creature.ragdoll.IgnoreCollision(collider, true);
+            }
+            item.ignoredRagdoll = creature.ragdoll;
+
+            if (creature.handLeft.grabbedHandle?.item != null)
+            {
+                foreach (ColliderGroup colliderGroup1 in item.colliderGroups)
+                {
+                    foreach (Collider collider1 in colliderGroup1.colliders)
+                    {
+                        foreach (ColliderGroup colliderGroup2 in creature.handLeft.grabbedHandle.item.colliderGroups)
+                        {
+                            foreach (Collider collider2 in colliderGroup2.colliders)
+                                Physics.IgnoreCollision(collider1, collider2, true);
+                        }
+                    }
+                }
+                item.ignoredItem = creature.handLeft.grabbedHandle.item;
+            }
+
+            if (creature.handRight.grabbedHandle?.item != null)
+            {
+                foreach (ColliderGroup colliderGroup1 in item.colliderGroups)
+                {
+                    foreach (Collider collider1 in colliderGroup1.colliders)
+                    {
+                        foreach (ColliderGroup colliderGroup2 in creature.handRight.grabbedHandle.item.colliderGroups)
+                        {
+                            foreach (Collider collider2 in colliderGroup2.colliders)
+                                Physics.IgnoreCollision(collider1, collider2, true);
+                        }
+                    }
+                }
+                item.ignoredItem = creature.handRight.grabbedHandle.item;
+            }
+        }
+
+        /// <summary>
+        /// return the head, torso, leftHand, rightHand, leftFoot and rightFoot of the creature
+        /// </summary>
+        public static List<RagdollPart> RagdollPartsImportantList(this Creature creature)
+        {
+            List<RagdollPart> ragdollPartsimportant = new List<RagdollPart> {
+                creature.GetPart(RagdollPart.Type.Head),
+                creature.GetPart(RagdollPart.Type.Torso),
+                creature.GetPart(RagdollPart.Type.LeftHand),
+                creature.GetPart(RagdollPart.Type.RightHand),
+                creature.GetPart(RagdollPart.Type.LeftFoot),
+                creature.GetPart(RagdollPart.Type.RightFoot)};
+            return ragdollPartsimportant;
+        }
+        /// <summary>
+        /// return the leftHand, rightHand, leftFoot and rightFoot of the creature
+        /// </summary>
+        public static List<RagdollPart> RagdollPartsExtremitiesBodyList(this Creature creature)
+        {
+            List<RagdollPart> ragdollPartsimportant = new List<RagdollPart> {
+                creature.GetPart(RagdollPart.Type.LeftHand),
+                creature.GetPart(RagdollPart.Type.RightHand),
+                creature.GetPart(RagdollPart.Type.LeftFoot),
+                creature.GetPart(RagdollPart.Type.RightFoot)};
+            return ragdollPartsimportant;
         }
     }
 }

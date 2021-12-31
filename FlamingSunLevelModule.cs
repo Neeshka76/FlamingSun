@@ -14,6 +14,7 @@ namespace FlamingSun
 {
     public class FlamingSunLevelModule : LevelModule
     {
+        private FlamingSunController flamingSunController;
         private bool sunsSpawned = false;
         private List<Item> ListSunsSpawned = new List<Item>();
         private float timer = 0f;
@@ -22,17 +23,11 @@ namespace FlamingSun
         private float sizeFireball = 1f;
         private List<Creature> ListOfCreatureInRadiusOfFire;
         private bool waveStarted = false;
-        public float timerIdleWaveOfFireballs = 10f;
-        public float timerActivateWaveOfFireballs = 30f;
-        public float timerTickThrowDelay = 0.3f;
-        public int numOfFireballsPerTick = 1;
-        public int chancesOfRandomThrow = 20;
-        public int radiusOfDetectionCreaturesByFlamingSun = 150;
-        public bool sunTargetsPlayer = true;
-        public bool fireballsOutsideOfCombatWave = false;
-        public bool sunThrowFireballs = true;
+        private string levelName;
+
         public override IEnumerator OnLoadCoroutine()
         {
+            flamingSunController = GameManager.local.gameObject.GetComponent<FlamingSunController>();
             EventManager.onLevelLoad += EventManager_onLevelLoad;
             EventManager.onLevelUnload += EventManager_onLevelUnload;
             return base.OnLoadCoroutine();
@@ -48,9 +43,70 @@ namespace FlamingSun
 
         private void EventManager_onLevelLoad(LevelData levelData, EventTime eventTime)
         {
-            if (levelData.id != "CharacterSelection" || levelData.id != "Dungeon" || levelData.id != "Master" && !sunsSpawned)
+            if(flamingSunController == null)
             {
-                switch (levelData.id)
+                flamingSunController = GameManager.local.gameObject.GetComponent<FlamingSunController>();
+            }
+            levelName = levelData.id;
+            if (flamingSunController.data.FlamingSunSpawnGetSet == true)
+            {
+                SpawnTheSun(levelName);
+            }
+        }
+
+        public override void Update()
+        {
+            if (flamingSunController.data.FlamingSunSpawnGetSet == true)
+            {
+                if (sunsSpawned == true)
+                {
+                    waveStarted = SnippetCode.SnippetCode.returnWaveStarted();
+                    if (!flamingSunController.data.FlamingSunAttackOutsideWavesGetSet && !waveStarted)
+                    {
+                        timer = 0f;
+                        timerDelay = 0f;
+                        waveOfFireballsActive = false;
+                    }
+                    if (sunsSpawned && (waveStarted || flamingSunController.data.FlamingSunAttackOutsideWavesGetSet) && flamingSunController.data.FlamingSunThrowFireballsGetSet)
+                    {
+                        CalculateWaveIdleActive();
+                        if (waveOfFireballsActive)
+                        {
+                            if (timerDelay < flamingSunController.data.FlamingSunTickThrowFireballsDelayGetSet)
+                            {
+                                timerDelay += Time.deltaTime;
+                            }
+                            else
+                            {
+                                foreach (Item sun in ListSunsSpawned)
+                                {
+                                    SpawnAndLaunchFireball(sun);
+                                }
+                                timerDelay = 0f;
+                            }
+                        }
+                    }
+                    GameManager.local.StartCoroutine(CleanFireballs());
+                }
+                else
+                {
+                    SpawnTheSun(levelName);
+                }
+            }
+            else
+            {
+                if(sunsSpawned == true)
+                {
+                    DespawnSun();
+                }
+            }
+        }
+
+        private void SpawnTheSun(string levelName)
+        {
+            if (levelName != "CharacterSelection" || levelName != "Dungeon" || levelName != "Master" && !sunsSpawned)
+            {
+                switch (levelName)
                 {
                     case "Arena":
                         Catalog.GetData<ItemData>("FlamingSunBig").SpawnAsync(item =>
@@ -138,42 +194,23 @@ namespace FlamingSun
             }
         }
 
-        public override void Update()
+        private void DespawnSun()
         {
-            waveStarted = SnippetCode.SnippetCode.returnWaveStarted();
-            if(!fireballsOutsideOfCombatWave && !waveStarted)
+            foreach(Item sun in ListSunsSpawned)
             {
-                timer = 0f;
-                timerDelay = 0f;
-                waveOfFireballsActive = false;
+                sun.Despawn();
             }
-            if(sunsSpawned && (waveStarted || fireballsOutsideOfCombatWave) && sunThrowFireballs)
-            {
-                CalculateWaveIdleActive();
-                if (waveOfFireballsActive)
-                {
-                    if (timerDelay < timerTickThrowDelay)
-                    {
-                        timerDelay += Time.deltaTime;
-                    }
-                    else
-                    {
-                        foreach (Item sun in ListSunsSpawned)
-                        {
-                            SpawnAndLaunchFireball(sun);
-                        }
-                        timerDelay = 0f;
-                    }
-                }
-            }
-            GameManager.local.StartCoroutine(CleanFireballs());
+            ListSunsSpawned.Clear();
+            timer = 0f;
+            timerDelay = 0f;
+            waveOfFireballsActive = false;
+            sunsSpawned = false;
         }
-
         private void CalculateWaveIdleActive()
         {
             if(!waveOfFireballsActive)
             {
-                if (timer < timerIdleWaveOfFireballs)
+                if (timer < flamingSunController.data.FlamingSunTimeIdleFireballsGetSet)
                 {
                     timer += Time.deltaTime;
                 }
@@ -185,7 +222,7 @@ namespace FlamingSun
             }
             else
             {
-                if(timer < timerActivateWaveOfFireballs)
+                if(timer < flamingSunController.data.FlamingSunTimeActivateFireballsGetSet)
                 {
                     timer += Time.deltaTime;
                 }
@@ -201,8 +238,8 @@ namespace FlamingSun
         {
             foreach (Item sun in ListSunsSpawned)
             {
-                ListOfCreatureInRadiusOfFire = SnippetCode.SnippetCode.CreaturesInRadius(sun.transform.position, radiusOfDetectionCreaturesByFlamingSun).ToList();
-                if(sunTargetsPlayer == false)
+                ListOfCreatureInRadiusOfFire = SnippetCode.SnippetCode.CreaturesInRadius(sun.transform.position, flamingSunController.data.FlamingSunRadiusOfDetectionGetSet).ToList();
+                if(flamingSunController.data.FlamingSunTargetPlayerGetSet == false)
                 {
                     for(int i = ListOfCreatureInRadiusOfFire.Count - 1; i >= 0; i--)
                     {
@@ -215,10 +252,10 @@ namespace FlamingSun
             }
             if (ListOfCreatureInRadiusOfFire.Count != 0)
             {
-                for (int i = 0; i <= numOfFireballsPerTick; i++)
+                for (int i = 0; i <= flamingSunController.data.FlamingSunNumFireballPerTickGetSet; i++)
                 {
                     Vector3 offset;
-                    if (UnityEngine.Random.Range(0, 100) >= chancesOfRandomThrow)
+                    if (UnityEngine.Random.Range(0, 100) >= flamingSunController.data.FlamingSunChancesOfRandomThrowGetSet)
                     {
                         offset = (SnippetCode.SnippetCode.GetRandomRagdollPart(ListOfCreatureInRadiusOfFire[UnityEngine.Random.Range(0, ListOfCreatureInRadiusOfFire.Count())]).transform.position
                             - origin.transform.position).normalized * (8.15f + (sizeFireball * 0.15f));
