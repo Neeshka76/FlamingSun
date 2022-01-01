@@ -48,7 +48,7 @@ namespace FlamingSun
                 flamingSunController = GameManager.local.gameObject.GetComponent<FlamingSunController>();
             }
             levelName = levelData.id;
-            if (flamingSunController.data.FlamingSunSpawnGetSet == true)
+            if (flamingSunController?.data.FlamingSunSpawnGetSet == true)
             {
                 SpawnTheSun(levelName);
             }
@@ -56,7 +56,7 @@ namespace FlamingSun
 
         public override void Update()
         {
-            if (flamingSunController.data.FlamingSunSpawnGetSet == true)
+            if (flamingSunController?.data.FlamingSunSpawnGetSet == true)
             {
                 if (sunsSpawned == true)
                 {
