@@ -60,7 +60,7 @@ namespace FlamingSun
             {
                 if (sunsSpawned == true)
                 {
-                    waveStarted = SnippetCode.SnippetCode.returnWaveStarted();
+                    waveStarted = Snippet.returnWaveStarted();
                     if (!flamingSunController.data.FlamingSunAttackOutsideWavesGetSet && !waveStarted)
                     {
                         timer = 0f;
@@ -238,17 +238,8 @@ namespace FlamingSun
         {
             foreach (Item sun in ListSunsSpawned)
             {
-                ListOfCreatureInRadiusOfFire = SnippetCode.SnippetCode.CreaturesInRadius(sun.transform.position, flamingSunController.data.FlamingSunRadiusOfDetectionGetSet).ToList();
-                if(flamingSunController.data.FlamingSunTargetPlayerGetSet == false)
-                {
-                    for(int i = ListOfCreatureInRadiusOfFire.Count - 1; i >= 0; i--)
-                    {
-                        if(ListOfCreatureInRadiusOfFire[i] == Player.currentCreature)
-                        {
-                            ListOfCreatureInRadiusOfFire.RemoveAt(i);
-                        }   
-                    }
-                }
+                ListOfCreatureInRadiusOfFire = Snippet.CreaturesInRadius(sun.transform.position, flamingSunController.data.FlamingSunRadiusOfDetectionGetSet, true, false, flamingSunController.data.FlamingSunTargetPlayerGetSet).ToList();
+                Debug.Log($"Contains player : {ListOfCreatureInRadiusOfFire.Contains(Player.local.creature)}");
             }
             if (ListOfCreatureInRadiusOfFire.Count != 0)
             {
@@ -257,7 +248,7 @@ namespace FlamingSun
                     Vector3 offset;
                     if (UnityEngine.Random.Range(0, 100) >= flamingSunController.data.FlamingSunChancesOfRandomThrowGetSet)
                     {
-                        offset = (SnippetCode.SnippetCode.GetRandomRagdollPart(ListOfCreatureInRadiusOfFire[UnityEngine.Random.Range(0, ListOfCreatureInRadiusOfFire.Count())]).transform.position
+                        offset = (Snippet.GetRandomRagdollPart(ListOfCreatureInRadiusOfFire[UnityEngine.Random.Range(0, ListOfCreatureInRadiusOfFire.Count())]).transform.position
                             - origin.transform.position).normalized * (8.15f + (sizeFireball * 0.15f));
                     }
                     else
@@ -265,7 +256,7 @@ namespace FlamingSun
                         offset = Quaternion.Euler(UnityEngine.Random.value * 360.0f,
                         UnityEngine.Random.value * 360.0f,
                         UnityEngine.Random.value * 360.0f)
-                        * SnippetCode.SnippetCode.forward * (8.15f + (sizeFireball * 0.15f));
+                        * Snippet.forward * (8.15f + (sizeFireball * 0.15f));
                     }
                     Catalog.GetData<ItemData>("ProjectileFlamingSun").SpawnAsync(projectile =>
                     {
@@ -273,7 +264,7 @@ namespace FlamingSun
                         projectile.transform.position = origin.transform.position + offset;
                         projectile.rb.useGravity = false;
                         projectile.rb.velocity = Vector3.zero;
-                        projectile.transform.localScale = SnippetCode.SnippetCode.one * sizeFireball;
+                        projectile.transform.localScale = Snippet.one * sizeFireball;
                         foreach (CollisionHandler collisionHandler in projectile.collisionHandlers)
                         {
                             foreach (Damager damager in collisionHandler.damagers)
@@ -282,12 +273,12 @@ namespace FlamingSun
                         ItemMagicProjectile component = projectile.GetComponent<ItemMagicProjectile>();
                         if (component)
                         {
-                            component.guided = false;
+                            component.guidance = GuidanceMode.NonGuided;
                             component.speed = 0;
                             component.allowDeflect = true;
                             component.deflectEffectData = Catalog.GetData<EffectData>("HitFireBallDeflect");
                             component.Fire((projectile.transform.position - origin.transform.position).normalized * 30f, Catalog.GetData<EffectData>("SpellFireball"));
-                            component.transform.localScale = SnippetCode.SnippetCode.one * sizeFireball;
+                            component.transform.localScale = Snippet.one * sizeFireball;
                         }
                         projectile.isThrowed = true;
                         projectile.isFlying = true;
@@ -307,6 +298,12 @@ namespace FlamingSun
                 }
             }
             yield return null;
+        }
+
+        public override void OnUnload()
+        {
+            EventManager.onLevelLoad -= EventManager_onLevelLoad;
+            EventManager.onLevelUnload -= EventManager_onLevelUnload;
         }
     }
 }

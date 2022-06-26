@@ -95,10 +95,6 @@ namespace FlamingSun
                     buttonDelete.onClick.AddListener(ClickButtonDelete);
                     // Initialization of datas
                     flamingSunController.data.KeyboardFinishEnterButtonPressedGetSet = false;
-                    flamingSunController.data.FlamingSunSpawnGetSet = false;
-                    flamingSunController.data.FlamingSunThrowFireballsGetSet = true;
-                    flamingSunController.data.FlamingSunAttackOutsideWavesGetSet = false;
-                    flamingSunController.data.FlamingSunTargetPlayerGetSet = true;
                 }
 
                 if (Player.currentCreature != null)

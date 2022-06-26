@@ -99,6 +99,7 @@ namespace FlamingSun
             flamingSunController.data.FlamingSunChancesOfRandomThrowGetSet = chancesOfRandomThrow;
             flamingSunController.data.FlamingSunRadiusOfDetectionGetSet = radiusOfDetectionCreaturesByFlamingSun;
 
+
             flamingSunHook = menu.gameObject.AddComponent<FlamingSunHook>();
             flamingSunHook.menu = this;
 
@@ -126,6 +127,7 @@ namespace FlamingSun
         public void ClickTargetPlayer()
         {
             flamingSunController.data.FlamingSunTargetPlayerGetSet ^= true;
+            Debug.Log(flamingSunController.data.FlamingSunTargetPlayerGetSet);
             UpdateDataPageLeft1();
         }
         public void ClickTimeIdleFireballs()
